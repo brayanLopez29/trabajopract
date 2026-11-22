@@ -683,7 +683,7 @@ def run_demonstration():
     return system
 
 
-# -------------------- MAIN PROGRAM --------------------
+# MAIN PROGRAM 
 
 if __name__ == "__main__":
     print("SOFTWARE FJ - INTEGRATED MANAGEMENT SYSTEM")
