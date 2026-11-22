@@ -1,8 +1,11 @@
+
+
 from abc import ABC, abstractmethod
 from datetime import datetime
 import logging
 
-# Events and errors are stored in a log file.
+
+
 logging.basicConfig(
     filename="software_fj.log",
     level=logging.INFO,
@@ -11,7 +14,7 @@ logging.basicConfig(
 )
 
 
-# -------------------- CUSTOM EXCEPTIONS --------------------
+
 
 class SoftwareFJError(Exception):
     pass
@@ -37,7 +40,7 @@ class ReservationError(SoftwareFJError):
     pass
 
 
-# -------------------- VALIDATION FUNCTIONS --------------------
+# VALIDATION FUNCTIONS 
 
 def text_required(value, field, minimum=1):
     if not isinstance(value, str) or len(value.strip()) < minimum:
@@ -65,7 +68,7 @@ def valid_phone(value):
     return value
 
 
-# -------------------- ABSTRACT ENTITY --------------------
+
 
 class Entity(ABC):
     def __init__(self, entity_id):
@@ -80,9 +83,9 @@ class Entity(ABC):
         pass
 
 
-# -------------------- CLIENT --------------------
+#  CLIENT
 
-class Client(Entity):
+class client(Entity):
     def __init__(self, client_id, name, email, phone):
         super().__init__(client_id)
         self.__name = text_required(name, "Name", 3)
@@ -105,7 +108,7 @@ class Client(Entity):
         return f"{self.entity_id} | {self.__name} | {self.__email} | {self.__phone}"
 
 
-# -------------------- ABSTRACT SERVICE --------------------
+
 
 class Service(ABC):
     def __init__(self, service_id, name, base_price):
@@ -114,6 +117,7 @@ class Service(ABC):
         self._base_price = float(positive_number(base_price, "Base price"))
         self._available = True
 
+    
     @property
     def service_id(self):
         return self._service_id
@@ -169,7 +173,7 @@ class Service(ABC):
         pass
 
 
-# -------------------- SPECIALIZED SERVICES --------------------
+
 
 class RoomReservation(Service):
     def validate_parameters(self, duration):
@@ -180,6 +184,7 @@ class RoomReservation(Service):
 
 
 class EquipmentRental(Service):
+    
     def validate_parameters(self, duration):
         if isinstance(duration, bool) or not isinstance(duration, int):
             raise ValidationError("Equipment rental duration must be whole days.")
@@ -197,7 +202,6 @@ class SpecializedConsulting(Service):
         return f"Specialized consulting: {self.name} | Price/hour: ${self._base_price:.2f}"
 
 
-# -------------------- RESERVATION --------------------
 
 class Reservation(Entity):
     def __init__(self, reservation_id, client, service, duration):
@@ -274,18 +278,21 @@ class Reservation(Entity):
         )
 
 
-# -------------------- MAIN SYSTEM: INTERNAL LISTS --------------------
+
+
 
 class SoftwareFJ:
     def __init__(self):
         self._clients = []
         self._services = []
         self._reservations = []
+        
 
     @property
     def clients(self):
         return tuple(self._clients)
 
+    
     @property
     def services(self):
         return tuple(self._services)
@@ -381,7 +388,7 @@ class SoftwareFJ:
             print("No reservations registered.")
 
 
-# -------------------- INPUT HELPERS --------------------
+
 
 def ask_text(prompt):
     value = input(prompt).strip()
@@ -400,7 +407,7 @@ def ask_float(prompt):
         raise ValidationError("Enter a valid number.") from error
 
 
-# -------------------- MENU OPERATIONS --------------------
+
 
 def menu_register_client(system):
     client = Client(
@@ -541,7 +548,7 @@ def interactive_menu():
             print("Operation finished.")
 
 
-# -------------------- AUTOMATIC TESTS: 14 OPERATIONS --------------------
+#  AUTOMATIC TESTS: 14 OPERATIONS
 
 def run_demonstration():
     system = SoftwareFJ()
@@ -645,6 +652,7 @@ def run_demonstration():
             raise ValidationError(
                 "Input could not be processed."
             ) from original
+            
 
     tests = [
         ("Register valid client", t1),
