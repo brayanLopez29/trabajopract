@@ -4,7 +4,7 @@ import logging
 import math
 import re
 
-# CONFIGURATION
+
 logging.basicConfig(
     filename="software_fj.log",
     level=logging.INFO,
@@ -13,7 +13,7 @@ logging.basicConfig(
 )
 
 
-# CUSTOM EXCEPTIONS
+
 class SoftwareFJError(Exception):
     pass
 
