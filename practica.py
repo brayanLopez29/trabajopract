@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 import logging
+import math
+import re
 
 
 
@@ -43,20 +45,28 @@ class ReservationError(SoftwareFJError):
 # VALIDATION FUNCTIONS 
 
 def text_required(value, field, minimum=1):
+    """Validate a required text field and return its trimmed value."""
     if not isinstance(value, str) or len(value.strip()) < minimum:
-        raise ValidationError(f"{field} is required.")
+        raise ValidationError(f"{field} must contain at least {minimum} character(s).")
     return value.strip()
 
 
 def positive_number(value, field):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
-        raise ValidationError(f"{field} must be a positive number.")
+    """Accept only finite positive integers or decimal numbers."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+    ):
+        raise ValidationError(f"{field} must be a finite positive number.")
     return value
 
 
 def valid_email(value):
+    """Perform a basic email format validation."""
     value = text_required(value, "Email", 5)
-    if "@" not in value or "." not in value.rsplit("@", 1)[-1]:
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
         raise ValidationError("Invalid email address.")
     return value
 
@@ -71,6 +81,8 @@ def valid_phone(value):
 
 
 class Entity(ABC):
+    """Abstract base class for objects with a unique identifier."""
+
     def __init__(self, entity_id):
         self._entity_id = text_required(str(entity_id), "ID")
 
@@ -85,7 +97,9 @@ class Entity(ABC):
 
 #  CLIENT
 
-class client(Entity):
+class Client(Entity):
+    """Store and validate a reservation system client."""
+
     def __init__(self, client_id, name, email, phone):
         super().__init__(client_id)
         self.__name = text_required(name, "Name", 3)
@@ -111,6 +125,8 @@ class client(Entity):
 
 
 class Service(ABC):
+    """Abstract service with availability and cost calculation."""
+
     def __init__(self, service_id, name, base_price):
         self._service_id = text_required(str(service_id), "Service ID")
         self._name = text_required(name, "Service name", 3)
@@ -155,11 +171,21 @@ class Service(ABC):
 
         self.validate_parameters(duration)
 
-        if not isinstance(tax, (int, float)) or not 0 <= tax <= 100:
-            raise ValidationError("Tax must be between 0 and 100.")
+        if (
+            isinstance(tax, bool)
+            or not isinstance(tax, (int, float))
+            or not math.isfinite(tax)
+            or not 0 <= tax <= 100
+        ):
+            raise ValidationError("Tax must be a number between 0 and 100.")
 
-        if not isinstance(discount, (int, float)) or not 0 <= discount <= 100:
-            raise ValidationError("Discount must be between 0 and 100.")
+        if (
+            isinstance(discount, bool)
+            or not isinstance(discount, (int, float))
+            or not math.isfinite(discount)
+            or not 0 <= discount <= 100
+        ):
+            raise ValidationError("Discount must be a number between 0 and 100.")
 
         subtotal = self._base_price * duration
         return round(subtotal * (1 - discount / 100) * (1 + tax / 100), 2)
@@ -204,6 +230,8 @@ class SpecializedConsulting(Service):
 
 
 class Reservation(Entity):
+    """Manage the lifecycle and total cost of a reservation."""
+
     def __init__(self, reservation_id, client, service, duration):
         super().__init__(reservation_id)
 
@@ -282,6 +310,8 @@ class Reservation(Entity):
 
 
 class SoftwareFJ:
+    """Store clients, services, and reservations in the application."""
+
     def __init__(self):
         self._clients = []
         self._services = []
@@ -410,14 +440,15 @@ def ask_float(prompt):
 
 
 def menu_register_client(system):
-    client = Client(
+    """Collect client data, validate it, and register the client."""
+    new_client = Client(
         ask_text("Client ID: "),
         ask_text("Full name: "),
         ask_text("Email: "),
         ask_text("Phone (digits only): ")
     )
 
-    system.register_client(client)
+    system.register_client(new_client)
     print("Client registered successfully.")
 
 
@@ -426,19 +457,19 @@ def menu_register_service(system):
     print("2. Equipment rental")
     print("3. Specialized consulting")
 
-    option = ask_text("Service type: ")
-    sid = ask_text("Service ID: ")
-    name = ask_text("Service name: ")
-    price = ask_float("Base price: ")
-
     service_types = {
         "1": RoomReservation,
         "2": EquipmentRental,
         "3": SpecializedConsulting
     }
 
+    option = ask_text("Service type: ")
     if option not in service_types:
-        raise ValidationError("Invalid service type.")
+        raise ValidationError("Invalid service type. Choose 1, 2, or 3.")
+
+    sid = ask_text("Service ID: ")
+    name = ask_text("Service name: ")
+    price = ask_float("Base price: ")
 
     system.register_service(service_types[option](sid, name, price))
     print("Service registered successfully.")
@@ -484,6 +515,18 @@ def menu_change_availability(system):
     print("Availability updated.")
 
 
+def menu_cancel_reservation(system):
+    reservation = system.find_reservation(ask_text("Reservation ID: "))
+    reservation.cancel()
+    print("Reservation cancelled successfully.")
+
+
+def menu_process_reservation(system):
+    reservation = system.find_reservation(ask_text("Reservation ID: "))
+    reservation.process()
+    print("Reservation processed successfully.")
+
+
 def interactive_menu():
     system = SoftwareFJ()
 
@@ -492,8 +535,8 @@ def interactive_menu():
         "2": lambda: menu_register_service(system),
         "3": lambda: menu_create_reservation(system),
         "4": lambda: menu_confirm_reservation(system),
-        "5": lambda: system.find_reservation(ask_text("Reservation ID: ")).cancel(),
-        "6": lambda: system.find_reservation(ask_text("Reservation ID: ")).process(),
+        "5": lambda: menu_cancel_reservation(system),
+        "6": lambda: menu_process_reservation(system),
         "7": lambda: menu_change_availability(system),
         "8": system.show_clients,
         "9": system.show_services,
@@ -537,9 +580,17 @@ def interactive_menu():
             logging.exception("Input/type error: %s", error)
             print("Invalid input:", error)
 
+        except EOFError:
+            logging.info("Input stream closed; closing the interactive menu.")
+            print("Input was closed. Returning to the main menu.")
+            break
+        except KeyboardInterrupt:
+            logging.info("User interrupted the interactive menu.")
+            print("\nOperation cancelled. Returning to the main menu.")
+            break
         except Exception as error:
             logging.exception("Unexpected error: %s", error)
-            print("Unexpected error. The application will continue.")
+            print(f"Unexpected error: {error}")
 
         else:
             logging.info("Menu option %s completed successfully.", option)
@@ -706,6 +757,9 @@ if __name__ == "__main__":
         logging.exception("Startup error: %s", error)
         print("Application error:", error)
 
+    except (EOFError, KeyboardInterrupt):
+        logging.info("Application startup was cancelled by the user.")
+        print("\nApplication cancelled by user.")
     except Exception as error:
         logging.exception("Critical startup error: %s", error)
         print("Unexpected error:", error)
