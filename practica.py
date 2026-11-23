@@ -1,13 +1,10 @@
-
-
 from abc import ABC, abstractmethod
 from datetime import datetime
 import logging
 import math
 import re
 
-
-
+# CONFIGURATION
 logging.basicConfig(
     filename="software_fj.log",
     level=logging.INFO,
@@ -16,8 +13,7 @@ logging.basicConfig(
 )
 
 
-
-
+# CUSTOM EXCEPTIONS
 class SoftwareFJError(Exception):
     pass
 
@@ -42,46 +38,54 @@ class ReservationError(SoftwareFJError):
     pass
 
 
-# VALIDATION FUNCTIONS 
-
+# VALIDATION FUNCTIONS
 def text_required(value, field, minimum=1):
-    """Validate a required text field and return its trimmed value."""
+    """Validate a required text field."""
     if not isinstance(value, str) or len(value.strip()) < minimum:
-        raise ValidationError(f"{field} must contain at least {minimum} character(s).")
+        raise ValidationError(
+            f"{field} must contain at least {minimum} character(s)."
+        )
     return value.strip()
 
 
 def positive_number(value, field):
-    """Accept only finite positive integers or decimal numbers."""
+    """Validate a finite positive number."""
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
         or not math.isfinite(value)
         or value <= 0
     ):
-        raise ValidationError(f"{field} must be a finite positive number.")
+        raise ValidationError(
+            f"{field} must be a finite positive number."
+        )
     return value
 
 
 def valid_email(value):
-    """Perform a basic email format validation."""
+    """Validate email format."""
     value = text_required(value, "Email", 5)
+
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
         raise ValidationError("Invalid email address.")
+
     return value
 
 
 def valid_phone(value):
+    """Validate phone number."""
     value = str(value).strip()
+
     if not value.isdigit() or not 7 <= len(value) <= 15:
-        raise ValidationError("Phone must contain 7 to 15 digits.")
+        raise ValidationError(
+            "Phone must contain 7 to 15 digits."
+        )
+
     return value
 
 
-
-
+# ABSTRACT BASE CLASS
 class Entity(ABC):
-    """Abstract base class for objects with a unique identifier."""
 
     def __init__(self, entity_id):
         self._entity_id = text_required(str(entity_id), "ID")
@@ -95,13 +99,13 @@ class Entity(ABC):
         pass
 
 
-#  CLIENT
-
+# CLIENT CLASS
 class Client(Entity):
     """Store and validate a reservation system client."""
 
     def __init__(self, client_id, name, email, phone):
         super().__init__(client_id)
+
         self.__name = text_required(name, "Name", 3)
         self.__email = valid_email(email)
         self.__phone = valid_phone(phone)
@@ -119,21 +123,25 @@ class Client(Entity):
         return self.__phone
 
     def describe(self):
-        return f"{self.entity_id} | {self.__name} | {self.__email} | {self.__phone}"
+        return (
+            f"{self.entity_id} | {self.__name} | "
+            f"{self.__email} | {self.__phone}"
+        )
 
 
-
-
+# ABSTRACT SERVICE CLASS
 class Service(ABC):
-    """Abstract service with availability and cost calculation."""
 
     def __init__(self, service_id, name, base_price):
-        self._service_id = text_required(str(service_id), "Service ID")
+        self._service_id = text_required(
+            str(service_id), "Service ID"
+        )
         self._name = text_required(name, "Service name", 3)
-        self._base_price = float(positive_number(base_price, "Base price"))
+        self._base_price = float(
+            positive_number(base_price, "Base price")
+        )
         self._available = True
 
-    
     @property
     def service_id(self):
         return self._service_id
@@ -148,9 +156,17 @@ class Service(ABC):
 
     def set_availability(self, status):
         if not isinstance(status, bool):
-            raise ValidationError("Availability must be True or False.")
+            raise ValidationError(
+                "Availability must be True or False."
+            )
+
         self._available = status
-        logging.info("Service %s availability=%s", self._service_id, status)
+
+        logging.info(
+            "Service %s availability=%s",
+            self._service_id,
+            status
+        )
 
     def calculate_cost(self, *args):
         """
@@ -159,15 +175,21 @@ class Service(ABC):
         calculate_cost(duration, tax_rate)
         calculate_cost(duration, tax_rate, discount)
         """
+
         if len(args) == 1:
             duration, tax, discount = args[0], 0, 0
+
         elif len(args) == 2:
             duration, tax = args
             discount = 0
+
         elif len(args) == 3:
             duration, tax, discount = args
+
         else:
-            raise TypeError("Use duration, optional tax_rate and optional discount.")
+            raise TypeError(
+                "Use duration, optional tax_rate and optional discount."
+            )
 
         self.validate_parameters(duration)
 
@@ -177,7 +199,9 @@ class Service(ABC):
             or not math.isfinite(tax)
             or not 0 <= tax <= 100
         ):
-            raise ValidationError("Tax must be a number between 0 and 100.")
+            raise ValidationError(
+                "Tax must be a number between 0 and 100."
+            )
 
         if (
             isinstance(discount, bool)
@@ -185,10 +209,17 @@ class Service(ABC):
             or not math.isfinite(discount)
             or not 0 <= discount <= 100
         ):
-            raise ValidationError("Discount must be a number between 0 and 100.")
+            raise ValidationError(
+                "Discount must be a number between 0 and 100."
+            )
 
         subtotal = self._base_price * duration
-        return round(subtotal * (1 - discount / 100) * (1 + tax / 100), 2)
+
+        return round(
+            subtotal * (1 - discount / 100) *
+            (1 + tax / 100),
+            2
+        )
 
     @abstractmethod
     def validate_parameters(self, duration):
@@ -199,38 +230,51 @@ class Service(ABC):
         pass
 
 
-
-
+# CONCRETE SERVICE CLASSES
 class RoomReservation(Service):
+
     def validate_parameters(self, duration):
         positive_number(duration, "Room hours")
 
     def describe(self):
-        return f"Room reservation: {self.name} | Price/hour: ${self._base_price:.2f}"
+        return (
+            f"Room reservation: {self.name} | "
+            f"Price/hour: ${self._base_price:.2f}"
+        )
 
 
 class EquipmentRental(Service):
-    
+
     def validate_parameters(self, duration):
         if isinstance(duration, bool) or not isinstance(duration, int):
-            raise ValidationError("Equipment rental duration must be whole days.")
+            raise ValidationError(
+                "Equipment rental duration must be whole days."
+            )
+
         positive_number(duration, "Rental days")
 
     def describe(self):
-        return f"Equipment rental: {self.name} | Price/day: ${self._base_price:.2f}"
+        return (
+            f"Equipment rental: {self.name} | "
+            f"Price/day: ${self._base_price:.2f}"
+        )
 
 
 class SpecializedConsulting(Service):
+
     def validate_parameters(self, duration):
         positive_number(duration, "Consulting hours")
 
     def describe(self):
-        return f"Specialized consulting: {self.name} | Price/hour: ${self._base_price:.2f}"
+        return (
+            f"Specialized consulting: {self.name} | "
+            f"Price/hour: ${self._base_price:.2f}"
+        )
 
 
-
+# RESERVATION CLASS
 class Reservation(Entity):
-    """Manage the lifecycle and total cost of a reservation."""
+    """Manage reservation status and total cost."""
 
     def __init__(self, reservation_id, client, service, duration):
         super().__init__(reservation_id)
@@ -263,66 +307,102 @@ class Reservation(Entity):
         return self._status
 
     def confirm(self, tax=0, discount=0):
+
         if self._status != "Pending":
-            raise ReservationError("Only pending reservations can be confirmed.")
+            raise ReservationError(
+                "Only pending reservations can be confirmed."
+            )
 
         if not self._service.available:
-            raise ServiceUnavailableError("Selected service is unavailable.")
+            raise ServiceUnavailableError(
+                "Selected service is unavailable."
+            )
 
         try:
-            total = self._service.calculate_cost(self._duration, tax, discount)
+            total = self._service.calculate_cost(
+                self._duration,
+                tax,
+                discount
+            )
+
         except (ValidationError, TypeError, ValueError) as error:
-            raise ReservationError("Reservation cost calculation failed.") from error
+            raise ReservationError(
+                "Reservation cost calculation failed."
+            ) from error
 
         if total < 0:
-            raise ReservationError("Calculated total cannot be negative.")
+            raise ReservationError(
+                "Calculated total cannot be negative."
+            )
 
         self._total = total
         self._status = "Confirmed"
-        logging.info("Reservation %s confirmed: %.2f", self.entity_id, total)
+
+        logging.info(
+            "Reservation %s confirmed: %.2f",
+            self.entity_id,
+            total
+        )
+
         return total
 
     def cancel(self):
+
         if self._status not in ("Pending", "Confirmed"):
-            raise ReservationError("This reservation cannot be cancelled.")
+            raise ReservationError(
+                "This reservation cannot be cancelled."
+            )
 
         self._status = "Cancelled"
-        logging.info("Reservation %s cancelled.", self.entity_id)
+
+        logging.info(
+            "Reservation %s cancelled.",
+            self.entity_id
+        )
 
     def process(self):
+
         if self._status != "Confirmed":
-            raise ReservationError("Only confirmed reservations can be processed.")
+            raise ReservationError(
+                "Only confirmed reservations can be processed."
+            )
 
         self._status = "Processed"
-        logging.info("Reservation %s processed.", self.entity_id)
+
+        logging.info(
+            "Reservation %s processed.",
+            self.entity_id
+        )
 
     def describe(self):
-        total = f"${self._total:.2f}" if self._total is not None else "Not calculated"
+
+        total = (
+            f"${self._total:.2f}"
+            if self._total is not None
+            else "Not calculated"
+        )
 
         return (
             f"{self.entity_id} | Client: {self._client.name} | "
-            f"Service: {self._service.name} | Duration: {self._duration} | "
+            f"Service: {self._service.name} | "
+            f"Duration: {self._duration} | "
             f"Status: {self._status} | Total: {total}"
         )
 
 
-
-
-
+# MAIN SYSTEM CLASS
 class SoftwareFJ:
-    """Store clients, services, and reservations in the application."""
+    """Manage clients, services and reservations."""
 
     def __init__(self):
         self._clients = []
         self._services = []
         self._reservations = []
-        
 
     @property
     def clients(self):
         return tuple(self._clients)
 
-    
     @property
     def services(self):
         return tuple(self._services)
@@ -333,64 +413,115 @@ class SoftwareFJ:
 
     @staticmethod
     def _unique(collection, identifier, label):
-        if any(item.entity_id == identifier for item in collection):
-            raise DuplicateError(f"{label} ID {identifier} already exists.")
+
+        if any(
+            item.entity_id == identifier
+            for item in collection
+        ):
+            raise DuplicateError(
+                f"{label} ID {identifier} already exists."
+            )
 
     def register_client(self, client):
+
         if not isinstance(client, Client):
             raise ValidationError("Invalid client object.")
 
-        self._unique(self._clients, client.entity_id, "Client")
+        self._unique(
+            self._clients,
+            client.entity_id,
+            "Client"
+        )
+
         self._clients.append(client)
-        logging.info("Client registered: %s", client.entity_id)
+
+        logging.info(
+            "Client registered: %s",
+            client.entity_id
+        )
 
     def register_service(self, service):
+
         if not isinstance(service, Service):
             raise ValidationError("Invalid service object.")
 
-        if any(s.service_id == service.service_id for s in self._services):
-            raise DuplicateError(f"Service ID {service.service_id} already exists.")
+        if any(
+            item.service_id == service.service_id
+            for item in self._services
+        ):
+            raise DuplicateError(
+                f"Service ID {service.service_id} already exists."
+            )
 
         self._services.append(service)
-        logging.info("Service registered: %s", service.service_id)
+
+        logging.info(
+            "Service registered: %s",
+            service.service_id
+        )
 
     def create_reservation(self, reservation):
-        if not isinstance(reservation, Reservation):
-            raise ValidationError("Invalid reservation object.")
 
-        self._unique(self._reservations, reservation.entity_id, "Reservation")
+        if not isinstance(reservation, Reservation):
+            raise ValidationError(
+                "Invalid reservation object."
+            )
+
+        self._unique(
+            self._reservations,
+            reservation.entity_id,
+            "Reservation"
+        )
 
         if reservation.client not in self._clients:
-            raise NotFoundError("Client is not registered.")
+            raise NotFoundError(
+                "Client is not registered."
+            )
 
         if reservation.service not in self._services:
-            raise NotFoundError("Service is not registered.")
+            raise NotFoundError(
+                "Service is not registered."
+            )
 
         self._reservations.append(reservation)
-        logging.info("Reservation created: %s", reservation.entity_id)
+
+        logging.info(
+            "Reservation created: %s",
+            reservation.entity_id
+        )
 
     def find_client(self, identifier):
+
         for client in self._clients:
             if client.entity_id == identifier:
                 return client
 
-        raise NotFoundError(f"Client {identifier} was not found.")
+        raise NotFoundError(
+            f"Client {identifier} was not found."
+        )
 
     def find_service(self, identifier):
+
         for service in self._services:
             if service.service_id == identifier:
                 return service
 
-        raise NotFoundError(f"Service {identifier} was not found.")
+        raise NotFoundError(
+            f"Service {identifier} was not found."
+        )
 
     def find_reservation(self, identifier):
+
         for reservation in self._reservations:
             if reservation.entity_id == identifier:
                 return reservation
 
-        raise NotFoundError(f"Reservation {identifier} was not found.")
+        raise NotFoundError(
+            f"Reservation {identifier} was not found."
+        )
 
     def show_clients(self):
+
         print("\n--- CLIENTS ---")
 
         for item in self._clients:
@@ -400,15 +531,20 @@ class SoftwareFJ:
             print("No clients registered.")
 
     def show_services(self):
+
         print("\n--- SERVICES ---")
 
         for item in self._services:
-            print(f"{item.service_id} | {item.describe()} | Available: {item.available}")
+            print(
+                f"{item.service_id} | {item.describe()} | "
+                f"Available: {item.available}"
+            )
 
         if not self._services:
             print("No services registered.")
 
     def show_reservations(self):
+
         print("\n--- RESERVATIONS ---")
 
         for item in self._reservations:
@@ -418,29 +554,40 @@ class SoftwareFJ:
             print("No reservations registered.")
 
 
-
-
+# INPUT FUNCTIONS
 def ask_text(prompt):
+
     value = input(prompt).strip()
 
     if not value:
-        raise ValidationError("This field cannot be empty.")
+        raise ValidationError(
+            "This field cannot be empty."
+        )
 
     return value
 
 
 def ask_float(prompt):
+
     try:
-        return float(input(prompt).strip())
+        value = float(input(prompt).strip())
 
     except ValueError as error:
-        raise ValidationError("Enter a valid number.") from error
+        raise ValidationError(
+            "Enter a valid number."
+        ) from error
+
+    if not math.isfinite(value):
+        raise ValidationError(
+            "Enter a finite number."
+        )
+
+    return value
 
 
-
-
+# MENU FUNCTIONS
 def menu_register_client(system):
-    """Collect client data, validate it, and register the client."""
+
     new_client = Client(
         ask_text("Client ID: "),
         ask_text("Full name: "),
@@ -449,11 +596,13 @@ def menu_register_client(system):
     )
 
     system.register_client(new_client)
-    print("Client registered successfully.")
+
+    print("\nClient registered successfully.")
 
 
 def menu_register_service(system):
-    print("1. Room reservation")
+
+    print("\n1. Room reservation")
     print("2. Equipment rental")
     print("3. Specialized consulting")
 
@@ -464,70 +613,130 @@ def menu_register_service(system):
     }
 
     option = ask_text("Service type: ")
+
     if option not in service_types:
-        raise ValidationError("Invalid service type. Choose 1, 2, or 3.")
+        raise ValidationError(
+            "Invalid service type. Choose 1, 2, or 3."
+        )
 
     sid = ask_text("Service ID: ")
     name = ask_text("Service name: ")
     price = ask_float("Base price: ")
 
-    system.register_service(service_types[option](sid, name, price))
-    print("Service registered successfully.")
+    service = service_types[option](
+        sid,
+        name,
+        price
+    )
+
+    system.register_service(service)
+
+    print("\nService registered successfully.")
 
 
 def menu_create_reservation(system):
+
     rid = ask_text("Reservation ID: ")
-    client = system.find_client(ask_text("Client ID: "))
-    service = system.find_service(ask_text("Service ID: "))
-    duration = ask_float("Duration (hours or days): ")
+
+    client = system.find_client(
+        ask_text("Client ID: ")
+    )
+
+    service = system.find_service(
+        ask_text("Service ID: ")
+    )
+
+    duration = ask_float(
+        "Duration (hours or days): "
+    )
 
     if isinstance(service, EquipmentRental):
+
         if not duration.is_integer():
-            raise ValidationError("Equipment rental requires whole days.")
+            raise ValidationError(
+                "Equipment rental requires whole days."
+            )
 
         duration = int(duration)
 
-    reservation = Reservation(rid, client, service, duration)
+    reservation = Reservation(
+        rid,
+        client,
+        service,
+        duration
+    )
+
     system.create_reservation(reservation)
 
-    print("Reservation created with Pending status.")
+    print(
+        "\nReservation created with Pending status."
+    )
 
 
 def menu_confirm_reservation(system):
-    reservation = system.find_reservation(ask_text("Reservation ID: "))
-    tax = ask_float("Tax percentage (0-100): ")
-    discount = ask_float("Discount percentage (0-100): ")
+
+    reservation = system.find_reservation(
+        ask_text("Reservation ID: ")
+    )
+
+    tax = ask_float(
+        "Tax percentage (0-100): "
+    )
+
+    discount = ask_float(
+        "Discount percentage (0-100): "
+    )
+
+    total = reservation.confirm(tax, discount)
 
     print(
-        f"Reservation confirmed. Total: "
-        f"${reservation.confirm(tax, discount):.2f}"
+        f"\nReservation confirmed. Total: ${total:.2f}"
     )
 
 
 def menu_change_availability(system):
-    service = system.find_service(ask_text("Service ID: "))
-    answer = ask_text("Set available? (y/n): ").lower()
+
+    service = system.find_service(
+        ask_text("Service ID: ")
+    )
+
+    answer = ask_text(
+        "Set available? (y/n): "
+    ).lower()
 
     if answer not in ("y", "n"):
         raise ValidationError("Enter y or n.")
 
     service.set_availability(answer == "y")
-    print("Availability updated.")
+
+    print("\nAvailability updated.")
 
 
 def menu_cancel_reservation(system):
-    reservation = system.find_reservation(ask_text("Reservation ID: "))
+
+    reservation = system.find_reservation(
+        ask_text("Reservation ID: ")
+    )
+
     reservation.cancel()
-    print("Reservation cancelled successfully.")
+
+    print("\nReservation cancelled successfully.")
 
 
 def menu_process_reservation(system):
-    reservation = system.find_reservation(ask_text("Reservation ID: "))
+
+    reservation = system.find_reservation(
+        ask_text("Reservation ID: ")
+    )
+
     reservation.process()
-    print("Reservation processed successfully.")
+
+    print("\nReservation processed successfully.")
 
 
+# INTERACTIVE MENU
 def interactive_menu():
+
     system = SoftwareFJ()
 
     actions = {
@@ -544,6 +753,7 @@ def interactive_menu():
     }
 
     while True:
+
         print("\n========== SOFTWARE FJ ==========")
         print("1. Register client")
         print("2. Register service")
@@ -558,62 +768,115 @@ def interactive_menu():
         print("0. Exit")
 
         try:
-            option = input("Choose an option: ").strip()
+            option = input(
+                "\nChoose an option: "
+            ).strip()
 
             if option == "0":
                 print("Goodbye.")
-                logging.info("Application closed normally.")
+
+                logging.info(
+                    "Application closed normally."
+                )
+
                 break
 
             action = actions.get(option)
 
             if action is None:
-                raise ValidationError("Invalid menu option.")
+                raise ValidationError(
+                    "Invalid menu option."
+                )
 
             action()
 
         except SoftwareFJError as error:
-            logging.exception("Handled application error: %s", error)
-            print("Operation failed:", error)
+
+            logging.exception(
+                "Handled application error: %s",
+                error
+            )
+
+            print("\nOperation failed:", error)
 
         except (ValueError, TypeError) as error:
-            logging.exception("Input/type error: %s", error)
-            print("Invalid input:", error)
+
+            logging.exception(
+                "Input/type error: %s",
+                error
+            )
+
+            print("\nInvalid input:", error)
 
         except EOFError:
-            logging.info("Input stream closed; closing the interactive menu.")
-            print("Input was closed. Returning to the main menu.")
+
+            logging.info(
+                "Input stream closed."
+            )
+
+            print(
+                "\nInput was closed. Returning to the main menu."
+            )
+
             break
+
         except KeyboardInterrupt:
-            logging.info("User interrupted the interactive menu.")
-            print("\nOperation cancelled. Returning to the main menu.")
+
+            logging.info(
+                "User interrupted the menu."
+            )
+
+            print(
+                "\nOperation cancelled. Returning to the main menu."
+            )
+
             break
+
         except Exception as error:
-            logging.exception("Unexpected error: %s", error)
-            print(f"Unexpected error: {error}")
+
+            logging.exception(
+                "Unexpected error: %s",
+                error
+            )
+
+            print(
+                f"\nUnexpected error: {error}"
+            )
 
         else:
-            logging.info("Menu option %s completed successfully.", option)
+
+            logging.info(
+                "Menu option %s completed successfully.",
+                option
+            )
 
         finally:
-            print("Operation finished.")
+            print("\nOperation finished.")
 
 
-#  AUTOMATIC TESTS: 14 OPERATIONS
-
+# AUTOMATIC TESTS: 14 OPERATIONS
 def run_demonstration():
+
     system = SoftwareFJ()
 
-    print("\n--- AUTOMATIC DEMONSTRATION: 14 OPERATIONS ---")
+    print(
+        "\n--- AUTOMATIC DEMONSTRATION: 14 OPERATIONS ---"
+    )
 
     def test(number, title, operation):
+
         print(f"\n{number}. {title}")
 
         try:
             operation()
 
         except Exception as error:
-            logging.exception("Demonstration test %s failed.", number)
+
+            logging.exception(
+                "Demonstration test %s failed.",
+                number
+            )
+
             print("Handled error:", error)
 
         else:
@@ -624,36 +887,68 @@ def run_demonstration():
 
     def t1():
         system.register_client(
-            Client("C001", "Carlos Perez", "carlos@example.com", "3001234567")
+            Client(
+                "C001",
+                "Carlos Perez",
+                "carlos@example.com",
+                "3001234567"
+            )
         )
 
     def t2():
         system.register_client(
-            Client("C002", "Maria Gomez", "maria@example.com", "3101234567")
+            Client(
+                "C002",
+                "Maria Gomez",
+                "maria@example.com",
+                "3101234567"
+            )
         )
 
     def t3():
-        Client("C003", "AB", "bad-email", "123")
+        Client(
+            "C003",
+            "AB",
+            "bad-email",
+            "123"
+        )
 
     def t4():
         system.register_service(
-            RoomReservation("S001", "Meeting Room", 50000)
+            RoomReservation(
+                "S001",
+                "Meeting Room",
+                50000
+            )
         )
 
     def t5():
         system.register_service(
-            EquipmentRental("S002", "Projector", 30000)
+            EquipmentRental(
+                "S002",
+                "Projector",
+                30000
+            )
         )
 
     def t6():
         system.register_service(
-            SpecializedConsulting("S003", "Technical Consulting", 80000)
+            SpecializedConsulting(
+                "S003",
+                "Technical Consulting",
+                80000
+            )
         )
 
     def t7():
-        RoomReservation("S004", "Invalid Room", -100)
+        RoomReservation(
+            "S004",
+            "Invalid Room",
+            -100
+        )
 
     def t8():
+
         reservation = Reservation(
             "R001",
             system.find_client("C001"),
@@ -662,9 +957,13 @@ def run_demonstration():
         )
 
         system.create_reservation(reservation)
-        print(f"Total: ${reservation.confirm(19, 10):.2f}")
+
+        print(
+            f"Total: ${reservation.confirm(19, 10):.2f}"
+        )
 
     def t9():
+
         Reservation(
             "R002",
             system.find_client("C002"),
@@ -673,6 +972,7 @@ def run_demonstration():
         )
 
     def t10():
+
         service = system.find_service("S003")
         service.set_availability(False)
 
@@ -696,14 +996,17 @@ def run_demonstration():
         system.find_client("C999")
 
     def t14():
+
         try:
-            raise ValueError("Invalid external input.")
+            raise ValueError(
+                "Invalid external input."
+            )
 
         except ValueError as original:
+
             raise ValidationError(
                 "Input could not be processed."
             ) from original
-            
 
     tests = [
         ("Register valid client", t1),
@@ -722,27 +1025,38 @@ def run_demonstration():
         ("Demonstrate exception chaining", t14)
     ]
 
-    for number, (title, operation) in enumerate(tests, start=1):
+    for number, (title, operation) in enumerate(
+        tests,
+        start=1
+    ):
         test(number, title, operation)
 
     system.show_clients()
     system.show_services()
     system.show_reservations()
 
-    print("\nAll 14 operations were attempted. Check software_fj.log.")
+    print(
+        "\nAll 14 operations were attempted. "
+        "Check software_fj.log."
+    )
 
     return system
 
 
-# MAIN PROGRAM 
-
+# MAIN PROGRAM
 if __name__ == "__main__":
-    print("SOFTWARE FJ - INTEGRATED MANAGEMENT SYSTEM")
+
+    print(
+        "SOFTWARE FJ - INTEGRATED MANAGEMENT SYSTEM"
+    )
+
     print("1. Interactive management menu")
     print("2. Automatic demonstration (14 operations)")
 
     try:
-        choice = input("Choose 1 or 2: ").strip()
+        choice = input(
+            "Choose 1 or 2: "
+        ).strip()
 
         if choice == "1":
             interactive_menu()
@@ -751,24 +1065,49 @@ if __name__ == "__main__":
             run_demonstration()
 
         else:
-            raise ValidationError("Choose option 1 or 2.")
+            raise ValidationError(
+                "Choose option 1 or 2."
+            )
 
     except SoftwareFJError as error:
-        logging.exception("Startup error: %s", error)
+
+        logging.exception(
+            "Startup error: %s",
+            error
+        )
+
         print("Application error:", error)
 
     except (EOFError, KeyboardInterrupt):
-        logging.info("Application startup was cancelled by the user.")
-        print("\nApplication cancelled by user.")
+
+        logging.info(
+            "Application startup was cancelled."
+        )
+
+        print(
+            "\nApplication cancelled by user."
+        )
+
     except Exception as error:
-        logging.exception("Critical startup error: %s", error)
-        print("Unexpected error:", error)
+
+        logging.exception(
+            "Critical startup error: %s",
+            error
+        )
+
+        print(
+            "Unexpected error:",
+            error
+        )
 
     else:
-        logging.info("Main execution completed.")
+        logging.info(
+            "Main execution completed."
+        )
 
     finally:
-        print("\nSoftware FJ program finished.")
+        print(
+            "\nSoftware FJ program finished."
+        )
 
 
-        
